@@ -27,22 +27,33 @@ export async function generateTradingCardPdfs(
     backFile: File
 ): Promise<{ frontPdf: Uint8Array; backPdf: Uint8Array }> {
     console.log('Starting PDF generation...');
+    let currentStep = '初期化';
 
     try {
         // 1. ファイルを読み込む
+        currentStep = 'ファイル読み込み';
         console.log('Reading files as ArrayBuffer...');
         const frontArrayBuffer = await frontFile.arrayBuffer();
         const backArrayBuffer = await backFile.arrayBuffer();
-        console.log('Files read successfully.');
+
+        // Uint8Arrayに変換（pdf-libの安定性向上のため）
+        const frontUint8Array = new Uint8Array(frontArrayBuffer);
+        const backUint8Array = new Uint8Array(backArrayBuffer);
+
+        console.log(`Files read successfully. Front: ${frontUint8Array.length} bytes, Back: ${backUint8Array.length} bytes`);
 
         // 2. PDFをロード
-        console.log('Loading PDF documents...');
-        // ignoreEncryption: true を追加して暗号化されたPDFでのエラーを回避（パスワードなしの場合）
-        const frontSrcDoc = await PDFDocument.load(frontArrayBuffer, { ignoreEncryption: true });
-        const backSrcDoc = await PDFDocument.load(backArrayBuffer, { ignoreEncryption: true });
+        currentStep = 'PDF解析（表面）';
+        console.log('Loading Front PDF document...');
+        const frontSrcDoc = await PDFDocument.load(frontUint8Array, { ignoreEncryption: true });
+
+        currentStep = 'PDF解析（裏面）';
+        console.log('Loading Back PDF document...');
+        const backSrcDoc = await PDFDocument.load(backUint8Array, { ignoreEncryption: true });
         console.log('PDF documents loaded.');
 
         // 3. 出力用PDFを作成
+        currentStep = '出力用PDF作成';
         console.log('Creating output documents...');
         const frontOutDoc = await PDFDocument.create();
         const backOutDoc = await PDFDocument.create();
@@ -52,10 +63,12 @@ export async function generateTradingCardPdfs(
         console.log(`Total cards: ${totalCards}, Total output pages: ${totalOutPages}`);
 
         // 裏面の1ページ目を取得
+        currentStep = '裏面ページ埋め込み準備';
         console.log('Embedding back page...');
         const [backSrcPage] = await backOutDoc.embedPages([backSrcDoc.getPages()[0]]);
 
         // 4. ページ生成ループ
+        currentStep = 'ページ生成ループ';
         for (let p = 0; p < totalOutPages; p++) {
             console.log(`Processing page ${p + 1}/${totalOutPages}...`);
             const frontPage = frontOutDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
@@ -73,8 +86,8 @@ export async function generateTradingCardPdfs(
 
                 // 表面カードの配置
                 if (cardIndex < totalCards) {
-                    // ここでエラーが起きやすいのでtry-catch
                     try {
+                        currentStep = `表面カード配置 (${cardIndex + 1}枚目)`;
                         const [frontSrcPage] = await frontOutDoc.embedPages([frontSrcDoc.getPages()[cardIndex]]);
 
                         const scale = Math.min(
@@ -93,11 +106,12 @@ export async function generateTradingCardPdfs(
                         });
                     } catch (embedError) {
                         console.error(`Error embedding card ${cardIndex}:`, embedError);
-                        throw new Error(`カード ${cardIndex + 1}枚目の埋め込みに失敗しました: ${embedError instanceof Error ? embedError.message : String(embedError)}`);
+                        throw new Error(`カード ${cardIndex + 1}枚目の処理中にエラー: ${embedError instanceof Error ? embedError.message : String(embedError)}`);
                     }
                 }
 
                 // 裏面カードの配置
+                currentStep = `裏面カード配置 (ページ${p + 1}, 枠${i + 1})`;
                 const backScale = Math.min(
                     CARD_WIDTH_PT / backSrcPage.width,
                     CARD_HEIGHT_PT / backSrcPage.height
@@ -116,6 +130,7 @@ export async function generateTradingCardPdfs(
         }
 
         // 5. 保存
+        currentStep = 'PDF保存処理';
         console.log('Saving PDFs...');
         const frontPdfBytes = await frontOutDoc.save();
         const backPdfBytes = await backOutDoc.save();
@@ -127,7 +142,11 @@ export async function generateTradingCardPdfs(
         };
 
     } catch (error) {
-        console.error('Fatal error in generateTradingCardPdfs:', error);
+        console.error(`Error in step "${currentStep}":`, error);
+        // エラーメッセージにステップ名を含める
+        if (error instanceof Error) {
+            error.message = `[${currentStep}] ${error.message}`;
+        }
         throw error;
     }
 }
