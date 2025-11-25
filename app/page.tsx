@@ -62,8 +62,8 @@ export default function Home() {
             const { frontPdf, backPdf } = await generateTradingCardPdfs(frontFile, backFile);
 
             // Blobを作成してURLを生成
-            const frontBlob = new Blob([frontPdf], { type: 'application/pdf' });
-            const backBlob = new Blob([backPdf], { type: 'application/pdf' });
+            const frontBlob = new Blob([frontPdf as any], { type: 'application/pdf' });
+            const backBlob = new Blob([backPdf as any], { type: 'application/pdf' });
 
             setFrontPdfUrl(URL.createObjectURL(frontBlob));
             setBackPdfUrl(URL.createObjectURL(backBlob));
@@ -86,7 +86,7 @@ export default function Home() {
             const page = doc.addPage();
             page.drawText('Test PDF');
             const pdfBytes = await doc.save();
-            const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+            const blob = new Blob([pdfBytes as any], { type: 'application/pdf' });
             const url = URL.createObjectURL(blob);
             window.open(url, '_blank');
             alert('テストPDF生成に成功しました');
