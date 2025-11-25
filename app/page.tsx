@@ -5,6 +5,7 @@ import { useDropzone } from 'react-dropzone';
 import { Download, FileText, Loader2 } from 'lucide-react';
 import './globals.css';
 import { generateTradingCardPdfs } from './utils/client-pdf-generation';
+import { PDFDocument } from 'pdf-lib';
 
 export default function Home() {
     const [frontFile, setFrontFile] = useState<File | null>(null);
@@ -20,7 +21,6 @@ export default function Home() {
         if (acceptedFiles[0]) {
             setFrontFile(acceptedFiles[0]);
             setError('');
-            // 新しいファイルが選ばれたら以前の結果をリセット
             setFrontPdfUrl(null);
             setBackPdfUrl(null);
         }
@@ -57,6 +57,7 @@ export default function Home() {
         setError('');
 
         try {
+            console.log('Generating PDF...');
             // クライアントサイドでPDF生成を実行
             const { frontPdf, backPdf } = await generateTradingCardPdfs(frontFile, backFile);
 
@@ -68,23 +69,48 @@ export default function Home() {
             setBackPdfUrl(URL.createObjectURL(backBlob));
 
         } catch (err) {
-            console.error(err);
-            setError('PDF生成中にエラーが発生しました: ' + (err instanceof Error ? err.message : String(err)));
+            console.error('Generation Error:', err);
+            // エラーメッセージを強制的に文字列化して表示
+            const errorMessage = err instanceof Error ? err.message : String(err);
+            setError(`【エラー発生】${errorMessage}`);
+            alert(`エラーが発生しました:\n${errorMessage}`);
         } finally {
             setIsGenerating(false);
+        }
+    };
+
+    // pdf-libの動作確認用
+    const handleTest = async () => {
+        try {
+            const doc = await PDFDocument.create();
+            const page = doc.addPage();
+            page.drawText('Test PDF');
+            const pdfBytes = await doc.save();
+            const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+            const url = URL.createObjectURL(blob);
+            window.open(url, '_blank');
+            alert('テストPDF生成に成功しました');
+        } catch (err) {
+            alert('テストPDF生成に失敗: ' + String(err));
         }
     };
 
     return (
         <main>
             <div className="container">
-                <h1>Trading Card Generator</h1>
+                <h1>Trading Card Generator <span style={{ fontSize: '0.5em', color: 'red' }}>(v3.0)</span></h1>
                 <p className="subtitle">
                     A4横向き面付け印刷（標準トレカサイズ: 63mm × 88mm）<br />
                     <span style={{ fontSize: '0.9em', color: '#888' }}>
                         ※ブラウザ内で処理するため、高速で安全です。サーバーへのアップロードは行われません。
                     </span>
                 </p>
+
+                <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+                    <button onClick={handleTest} style={{ padding: '5px 10px', fontSize: '12px', background: '#eee', border: '1px solid #ccc' }}>
+                        動作テスト（クリックしてPDF生成テスト）
+                    </button>
+                </div>
 
                 <div className="upload-section">
                     <div className="upload-box" {...getFrontRootProps()}>
@@ -114,7 +140,11 @@ export default function Home() {
                     </div>
                 </div>
 
-                {error && <div className="error">{error}</div>}
+                {error && (
+                    <div className="error" style={{ whiteSpace: 'pre-wrap', textAlign: 'left' }}>
+                        {error}
+                    </div>
+                )}
 
                 <button
                     onClick={handleGenerate}
