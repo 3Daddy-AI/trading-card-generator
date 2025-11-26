@@ -14,15 +14,13 @@ export default function Home() {
     const [error, setError] = useState<string>('');
 
     // 生成されたPDFのBlob URL
-    const [frontPdfUrl, setFrontPdfUrl] = useState<string | null>(null);
-    const [backPdfUrl, setBackPdfUrl] = useState<string | null>(null);
+    const [pdfUrl, setPdfUrl] = useState<string | null>(null);
 
     const onDropFront = (acceptedFiles: File[]) => {
         if (acceptedFiles[0]) {
             setFrontFile(acceptedFiles[0]);
             setError('');
-            setFrontPdfUrl(null);
-            setBackPdfUrl(null);
+            setPdfUrl(null);
         }
     };
 
@@ -30,8 +28,7 @@ export default function Home() {
         if (acceptedFiles[0]) {
             setBackFile(acceptedFiles[0]);
             setError('');
-            setFrontPdfUrl(null);
-            setBackPdfUrl(null);
+            setPdfUrl(null);
         }
     };
 
@@ -58,19 +55,15 @@ export default function Home() {
 
         try {
             console.log('Generating PDF...');
-            // クライアントサイドでPDF生成を実行
-            const { frontPdf, backPdf } = await generateTradingCardPdfs(frontFile, backFile);
+            // クライアントサイドでPDF生成を実行 (統合された1つのPDFが返る)
+            const mergedPdf = await generateTradingCardPdfs(frontFile, backFile);
 
             // Blobを作成してURLを生成
-            const frontBlob = new Blob([frontPdf as any], { type: 'application/pdf' });
-            const backBlob = new Blob([backPdf as any], { type: 'application/pdf' });
-
-            setFrontPdfUrl(URL.createObjectURL(frontBlob));
-            setBackPdfUrl(URL.createObjectURL(backBlob));
+            const blob = new Blob([mergedPdf as any], { type: 'application/pdf' });
+            setPdfUrl(URL.createObjectURL(blob));
 
         } catch (err) {
             console.error('Generation Error:', err);
-            // エラーメッセージを強制的に文字列化して表示
             const errorMessage = err instanceof Error ? err.message : String(err);
             setError(`【エラー発生】${errorMessage}`);
             alert(`エラーが発生しました:\n${errorMessage}`);
@@ -98,7 +91,7 @@ export default function Home() {
     return (
         <main>
             <div className="container">
-                <h1>Trading Card Generator <span style={{ fontSize: '0.5em', color: 'red' }}>(v3.0)</span></h1>
+                <h1>Trading Card Generator <span style={{ fontSize: '0.5em', color: 'red' }}>(v3.1)</span></h1>
                 <p className="subtitle">
                     A4横向き面付け印刷（標準トレカサイズ: 63mm × 88mm）<br />
                     <span style={{ fontSize: '0.9em', color: '#888' }}>
@@ -157,36 +150,32 @@ export default function Home() {
                             生成中...
                         </>
                     ) : (
-                        'A4面付けPDFを生成'
+                        'A4面付けPDFを生成（両面用）'
                     )}
                 </button>
 
-                {frontPdfUrl && backPdfUrl && (
+                {pdfUrl && (
                     <div className="result">
                         <h2>生成完了！</h2>
                         <p style={{ marginBottom: '1.5rem', color: '#555' }}>
-                            以下のボタンからそれぞれのPDFをダウンロードしてください。
+                            以下のボタンからPDFをダウンロードしてください。<br />
+                            （表ページと裏ページが交互に配置されています）
                         </p>
 
-                        <div className="result-actions">
+                        <div className="result-actions" style={{ justifyContent: 'center' }}>
                             <a
-                                href={frontPdfUrl}
-                                download="toreca-front.pdf"
-                                className="download-button front-download"
-                                style={{ textDecoration: 'none' }}
+                                href={pdfUrl}
+                                download="toreca-merged.pdf"
+                                className="download-button"
+                                style={{
+                                    textDecoration: 'none',
+                                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                    padding: '1rem 2rem',
+                                    fontSize: '1.1rem'
+                                }}
                             >
-                                <Download size={20} />
-                                表面PDFをダウンロード
-                            </a>
-
-                            <a
-                                href={backPdfUrl}
-                                download="toreca-back.pdf"
-                                className="download-button back-download"
-                                style={{ textDecoration: 'none', background: 'linear-gradient(135deg, #ed64a6 0%, #d53f8c 100%)' }}
-                            >
-                                <Download size={20} />
-                                裏面PDFをダウンロード
+                                <Download size={24} style={{ marginRight: '10px' }} />
+                                両面印刷用PDFをダウンロード
                             </a>
                         </div>
                     </div>
@@ -198,9 +187,8 @@ export default function Home() {
                         <li>子どもたちが作ったカードのPDF (表面) をアップロードします。</li>
                         <li>共通の裏面デザインPDF (1ページ) をアップロードします。</li>
                         <li>「A4面付けPDFを生成」ボタンを押します。</li>
-                        <li>生成された「表面PDF」と「裏面PDF」をそれぞれダウンロードします。</li>
-                        <li>プリンタの設定で<strong>「A4横向き」</strong>を選んで印刷してください。</li>
-                        <li>両面印刷する場合は、プリンタの仕様に合わせて用紙をセットするか、手差しで裏面を印刷してください。</li>
+                        <li>生成されたPDFをダウンロードします。</li>
+                        <li>プリンタの設定で<strong>「A4横向き」「両面印刷（長辺とじ）」</strong>を選んで印刷してください。</li>
                         <li>印刷後、グリッド線に沿って切り取るとカードが完成します（標準トレカサイズ: 63mm × 88mm）。</li>
                     </ol>
                 </div>

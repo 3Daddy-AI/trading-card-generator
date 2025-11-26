@@ -25,8 +25,8 @@ const MARGIN_Y = (PAGE_HEIGHT - TOTAL_GRID_HEIGHT) / 2;
 export async function generateTradingCardPdfs(
     frontFile: File,
     backFile: File
-): Promise<{ frontPdf: Uint8Array; backPdf: Uint8Array }> {
-    console.log('Starting PDF generation...');
+): Promise<Uint8Array> {
+    console.log('Starting PDF generation (Merged mode)...');
     let currentStep = '初期化';
 
     try {
@@ -36,45 +36,39 @@ export async function generateTradingCardPdfs(
         const frontArrayBuffer = await frontFile.arrayBuffer();
         const backArrayBuffer = await backFile.arrayBuffer();
 
-        // Uint8Arrayに変換（pdf-libの安定性向上のため）
         const frontUint8Array = new Uint8Array(frontArrayBuffer);
         const backUint8Array = new Uint8Array(backArrayBuffer);
 
-        console.log(`Files read successfully. Front: ${frontUint8Array.length} bytes, Back: ${backUint8Array.length} bytes`);
-
         // 2. PDFをロード
         currentStep = 'PDF解析（表面）';
-        console.log('Loading Front PDF document...');
         const frontSrcDoc = await PDFDocument.load(frontUint8Array, { ignoreEncryption: true });
 
         currentStep = 'PDF解析（裏面）';
-        console.log('Loading Back PDF document...');
         const backSrcDoc = await PDFDocument.load(backUint8Array, { ignoreEncryption: true });
-        console.log('PDF documents loaded.');
 
-        // 3. 出力用PDFを作成
+        // 3. 出力用PDFを作成 (1つのドキュメントに統合)
         currentStep = '出力用PDF作成';
-        console.log('Creating output documents...');
-        const frontOutDoc = await PDFDocument.create();
-        const backOutDoc = await PDFDocument.create();
+        const outDoc = await PDFDocument.create();
 
         const totalCards = frontSrcDoc.getPageCount();
         const totalOutPages = Math.ceil(totalCards / CARDS_PER_PAGE);
-        console.log(`Total cards: ${totalCards}, Total output pages: ${totalOutPages}`);
+        console.log(`Total cards: ${totalCards}, Total output sets (front+back): ${totalOutPages}`);
 
         // 裏面の1ページ目を取得
         currentStep = '裏面ページ埋め込み準備';
-        console.log('Embedding back page...');
-        const [backSrcPage] = await backOutDoc.embedPages([backSrcDoc.getPages()[0]]);
+        const [backSrcPage] = await outDoc.embedPages([backSrcDoc.getPages()[0]]);
 
         // 4. ページ生成ループ
         currentStep = 'ページ生成ループ';
         for (let p = 0; p < totalOutPages; p++) {
-            console.log(`Processing page ${p + 1}/${totalOutPages}...`);
-            const frontPage = frontOutDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
-            const backPage = backOutDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+            console.log(`Processing set ${p + 1}/${totalOutPages}...`);
 
+            // 表面ページ作成
+            const frontPage = outDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
             drawGridLines(frontPage);
+
+            // 裏面ページ作成（表面の直後に追加）
+            const backPage = outDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
             drawGridLines(backPage);
 
             for (let i = 0; i < CARDS_PER_PAGE; i++) {
@@ -88,7 +82,7 @@ export async function generateTradingCardPdfs(
                 if (cardIndex < totalCards) {
                     try {
                         currentStep = `表面カード配置 (${cardIndex + 1}枚目)`;
-                        const [frontSrcPage] = await frontOutDoc.embedPages([frontSrcDoc.getPages()[cardIndex]]);
+                        const [frontSrcPage] = await outDoc.embedPages([frontSrcDoc.getPages()[cardIndex]]);
 
                         const scale = Math.min(
                             CARD_WIDTH_PT / frontSrcPage.width,
@@ -110,8 +104,9 @@ export async function generateTradingCardPdfs(
                     }
                 }
 
-                // 裏面カードの配置
-                currentStep = `裏面カード配置 (ページ${p + 1}, 枠${i + 1})`;
+                // 裏面カードの配置（すべての枠に配置）
+                // ※共通デザインなので、表面と同じ位置（裏側）に配置すればOK
+                currentStep = `裏面カード配置 (セット${p + 1}, 枠${i + 1})`;
                 const backScale = Math.min(
                     CARD_WIDTH_PT / backSrcPage.width,
                     CARD_HEIGHT_PT / backSrcPage.height
@@ -131,19 +126,14 @@ export async function generateTradingCardPdfs(
 
         // 5. 保存
         currentStep = 'PDF保存処理';
-        console.log('Saving PDFs...');
-        const frontPdfBytes = await frontOutDoc.save();
-        const backPdfBytes = await backOutDoc.save();
-        console.log('PDFs saved successfully.');
+        console.log('Saving merged PDF...');
+        const pdfBytes = await outDoc.save();
+        console.log('PDF saved successfully.');
 
-        return {
-            frontPdf: frontPdfBytes,
-            backPdf: backPdfBytes,
-        };
+        return pdfBytes;
 
     } catch (error) {
         console.error(`Error in step "${currentStep}":`, error);
-        // エラーメッセージにステップ名を含める
         if (error instanceof Error) {
             error.message = `[${currentStep}] ${error.message}`;
         }
