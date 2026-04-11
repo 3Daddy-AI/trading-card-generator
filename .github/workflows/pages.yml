@@ -1,4 +1,4 @@
-name: Deploy PWA to GitHub Pages
+name: Deploy to GitHub Pages
 
 on:
   push:
@@ -20,10 +20,16 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Build site
+        run: |
+          mkdir -p _site
+          cp index.html _site/
+          cp -r assets _site/
+          cp -r web _site/
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v2
         with:
-          path: web
+          path: _site
 
   deploy:
     needs: build
